@@ -8,7 +8,6 @@
     <Folder Include="Commands\" />
     <Folder Include="CommandHandlers\" />
     <Folder Include="Events\" />
-    <Folder Include="Interfaces\" />
     <Folder Include="EventHandlers\" />
   </ItemGroup>
 
