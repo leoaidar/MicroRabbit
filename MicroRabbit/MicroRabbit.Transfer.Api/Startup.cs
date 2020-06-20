@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using MediatR;
-using MicroRabbit.Banking.Data.Context;
 using MicroRabbit.Infra.IoC;
+using MicroRabbit.Transfer.Data.Context;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
@@ -37,11 +37,11 @@ namespace MicroRabbit.Transfer.Api
 
             //services.AddControllers();
 
-            services.AddMvc().SetCompatibilityVersion(CompatibilityVersion.Latest);
+            services.AddMvc(options=> { options.EnableEndpointRouting = false; }).SetCompatibilityVersion(CompatibilityVersion.Latest);
 
             services.AddSwaggerGen(c =>
             {
-                c.SwaggerDoc("v1", new OpenApiInfo { Title = "Banking Microservice ", Version = "v1" });
+                c.SwaggerDoc("v1", new OpenApiInfo { Title = "Transfer Microservice ", Version = "v1" });
             });
 
             services.AddMediatR(typeof(Startup));
