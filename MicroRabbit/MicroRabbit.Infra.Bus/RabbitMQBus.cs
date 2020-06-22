@@ -2,6 +2,8 @@
 using MicroRabbit.Domain.Core.Bus;
 using MicroRabbit.Domain.Core.Commands;
 using MicroRabbit.Domain.Core.Events;
+using Microsoft.Extensions.DependencyInjection;
+using Newtonsoft.Json;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using System;
@@ -19,10 +21,12 @@ namespace MicroRabbit.Infra.Bus
         private readonly IMediator _mediator;
         private readonly Dictionary<string, List<Type>> _handlers;
         private readonly List<Type> _eventTypes;
+        private readonly IServiceScopeFactory _serviceScopeFactory;
 
-        public RabbitMQBus(IMediator mediator)
+        public RabbitMQBus(IMediator mediator, IServiceScopeFactory serviceScopeFactory)
         {
             _mediator = mediator;
+            _serviceScopeFactory = serviceScopeFactory;
             _handlers = new Dictionary<string, List<Type>>();
             _eventTypes = new List<Type>();
         }
@@ -42,7 +46,10 @@ namespace MicroRabbit.Infra.Bus
 
                 channel.QueueDeclare(eventName, false, false, false, null);
 
-                var message = JsonSerializer.Serialize(@event);
+                //old using NewtonJson cause this had a bug JsonSerializer version doesnt support constructor with parameter yet :(
+                //{"Deserialization of reference types without parameterless constructor is not supported. Type 'MicroRabbit.Transfer.Domain.Events.TransferCreatedEvent'"}
+                //var message = JsonSerializer.Serialize(@event);
+                var message = JsonConvert.SerializeObject(@event);
                 var body = Encoding.UTF8.GetBytes(message);
 
                 channel.BasicPublish("", eventName, null, body);
@@ -116,17 +123,26 @@ namespace MicroRabbit.Infra.Bus
         {
             if(_handlers.ContainsKey(eventName))
             {
-                var subscriptions = _handlers[eventName];
-                foreach (var subscription in subscriptions)
+                using (var scope = _serviceScopeFactory.CreateScope())
                 {
-                    var handler = Activator.CreateInstance(subscription);
-                    if (handler == null) continue;
-                    var eventType = _eventTypes.SingleOrDefault(t => t.Name == eventName);
-                    var @event = JsonSerializer.Deserialize(message, eventType);
-                    var concreteType = typeof(IEventHandler<>).MakeGenericType(eventType);
-                    await (Task)concreteType.GetMethod("Handle").Invoke(handler, new object[] { @event });
+                    var subscriptions = _handlers[eventName];
+                    foreach (var subscription in subscriptions)
+                    {
+                        //Before Refactor adding nuget Microsoft.DependencyInjection, IServiceScopeFactory, scope.ServiceProvider.GetService()
+                        //var handler = Activator.CreateInstance(subscription);
+                        var handler = scope.ServiceProvider.GetService(subscription);
+                        if (handler == null) continue;
+                        var eventType = _eventTypes.SingleOrDefault(t => t.Name == eventName);
+                        //old using NewtonJson cause this had a bug JsonSerializer version doesnt support constructor with parameter yet :(
+                        //{"Deserialization of reference types without parameterless constructor is not supported. Type 'MicroRabbit.Transfer.Domain.Events.TransferCreatedEvent'"}
+                        //var @event = JsonSerializer.Deserialize<eventType>(message, eventType);
+                        var @event = JsonConvert.DeserializeObject(message, eventType);
+                        var concreteType = typeof(IEventHandler<>).MakeGenericType(eventType);
+                        await (Task)concreteType.GetMethod("Handle").Invoke(handler, new object[] { @event });
 
+                    }
                 }
+
             }
         }
     }
